@@ -1,5 +1,7 @@
 using Godot;
 using System;
+using System.IO;
+using System.Linq;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -75,13 +77,33 @@ public class BlenderAutoImport : EditorImportPlugin {
 			"--python", "\"" + System.IO.Path.Combine(System.Environment.CurrentDirectory, "addons", "BlenderAutoImport", "export.py") + "\"", 
 			"--", $"\"{savePath.Replace("res:/", System.Environment.CurrentDirectory)}.{GetIntermediateExtension()}\"");
 
-		bool didImport = Invoke(
-			info, 
-			exe_name, 
-			RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\Program Files\Steam\steamapps\common\Blender\" + exe_name : @"~/.local/share/Steam/Blender/" + exe_name,
-			RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\Program Files (x86)\Steam\steamapps\common\Blender\" + exe_name : @"~/.steam/steam/SteamApps/common/Blender/" + exe_name
-		);
+		// On path
+		bool didImport = Invoke(info, exe_name);
 
+		// Plain installation
+		if (!didImport) {
+			// Install location of all blender versions
+			var path = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\Program Files\Blender Foundation\" : @"/usr/lib/blender/";
+			if (System.IO.Directory.Exists(path)) {
+				// Get highest version of Blender
+				var versionSpecificPath = System.IO.Directory.GetDirectories(path).Where(p => p.StartsWith("Blender") || p.StartsWith("blender")).OrderByDescending(p => p).FirstOrDefault();
+				// Import using that version
+				if (versionSpecificPath != null)
+					didImport = Invoke(info, System.IO.Path.Combine(path, versionSpecificPath, exe_name));
+			}
+		}
+
+		// Steam installation
+		if (!didImport) {
+			didImport = Invoke(
+				info,
+				// 64 and 32 bit paths
+				RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\Program Files\Steam\steamapps\common\Blender\" + exe_name : @"~/.local/share/Steam/Blender/" + exe_name,
+				RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\Program Files (x86)\Steam\steamapps\common\Blender\" + exe_name : @"~/.steam/steam/SteamApps/common/Blender/" + exe_name
+			);
+		}
+
+		// Check to see if we did import anything
 		if (!didImport) {
 			return (int)Godot.Error.Unavailable;
 		} else {
